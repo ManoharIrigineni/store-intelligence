@@ -50,7 +50,7 @@ def save_events_batch(events: list[StoreEvent]) -> int:
                 event.camera_id,
                 event.visitor_id,
                 event.event_type,
-                event.timestamp.isoformat(),
+                event.timestamp.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 event.zone_id,
                 event.dwell_ms,
                 1 if event.is_staff else 0,
