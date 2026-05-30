@@ -84,7 +84,7 @@ def calculate_store_funnel(store_id: str) -> dict:
 
     return {
         "store_id": store_id,
-        "stages": ["ENTRY", "ZONE_VISIT", "BILLING_QUEUE", "PURCHASE"],
+        "funnel": ["ENTRY", "ZONE_VISIT", "BILLING_QUEUE", "PURCHASE"],
         "counts": counts,
         "drop_off_percentage": drop_off
     }
