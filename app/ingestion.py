@@ -35,6 +35,8 @@ def save_events_batch(events: list[StoreEvent]) -> int:
     cursor.execute("BEGIN TRANSACTION")
     
     for event in events:
+        if event.confidence < 0.50:
+            continue
         try:
             # Capture total changes BEFORE executing this statement
             changes_before = conn.total_changes

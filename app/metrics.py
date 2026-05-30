@@ -71,22 +71,34 @@ def calculate_store_metrics(store_id: str) -> dict:
     dwell_dict = dict(zip(df_dwell['zone_id'], df_dwell['avg_dwell']))
     
     # 5. Extract current queue metrics & abandonment estimates
-    query_queue = """
-        SELECT COUNT(*) as join_count 
+    # 5. Extract current queue metrics & abandonment estimates
+    query_queue_joins = """
+        SELECT COUNT(DISTINCT visitor_id) 
         FROM events 
-        WHERE store_id = ? AND event_type = 'BILLING_QUEUE_JOIN'
-    """
-    query_abandon = """
-        SELECT COUNT(*) as abandon_count 
-        FROM events 
-        WHERE store_id = ? AND event_type = 'BILLING_QUEUE_ABANDON'
+        WHERE store_id = ? AND (event_type = 'BILLING_QUEUE_JOIN' OR zone_id = 'BILLING') AND is_staff = 0
     """
     
+    query_queue_exits = """
+        SELECT COUNT(DISTINCT visitor_id) 
+        FROM events 
+        WHERE store_id = ? AND event_type IN ('BILLING_QUEUE_LEAVE', 'BILLING_QUEUE_ABANDON') AND is_staff = 0
+    """
+    
+    query_joins_raw = "SELECT COUNT(*) FROM events WHERE store_id = ? AND event_type = 'BILLING_QUEUE_JOIN'"
+    query_abandon_raw = "SELECT COUNT(*) FROM events WHERE store_id = ? AND event_type = 'BILLING_QUEUE_ABANDON'"
+    
     try:
-        queue_joins = conn.execute(query_queue, (store_id,)).fetchone()[0]
-        queue_abandons = conn.execute(query_abandon, (store_id,)).fetchone()[0]
+        total_queued_shoppers = conn.execute(query_queue_joins, (store_id,)).fetchone()[0] or 0
+        total_exited_shoppers = conn.execute(query_queue_exits, (store_id,)).fetchone()[0] or 0
+        
+        # Calculate active queue depth dynamically based on live state delta
+        dynamic_queue_depth = max(0, total_queued_shoppers - total_exited_shoppers)
+        
+        queue_joins = conn.execute(query_joins_raw, (store_id,)).fetchone()[0] or 0
+        queue_abandons = conn.execute(query_abandon_raw, (store_id,)).fetchone()[0] or 0
         abandonment_rate = queue_abandons / queue_joins if queue_joins > 0 else 0.0
     except Exception:
+        dynamic_queue_depth = 0
         abandonment_rate = 0.0
 
     conn.close()
@@ -97,7 +109,7 @@ def calculate_store_metrics(store_id: str) -> dict:
         "unique_visitors": total_unique_visitors,
         "conversion_rate": round(conversion_rate, 4),
         "avg_dwell_per_zone": {k: round(v, 2) for k, v in dwell_dict.items()},
-        "queue_depth": 0, 
+        "queue_depth": dynamic_queue_depth, # Now completely live!
         "abandonment_rate": round(abandonment_rate, 4),
         "data_confidence": confidence_flag
     }
