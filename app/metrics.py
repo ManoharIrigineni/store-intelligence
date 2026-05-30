@@ -8,7 +8,7 @@ POS_CSV_PATH = "/workspace/pos_transactions.csv"
 def calculate_store_metrics(store_id: str) -> dict:
     conn = sqlite3.connect(DB_PATH)
     
-    # 1. Gather all unique customer sessions (Staff excluded!) 
+    # 1. Gather all unique customer sessions (Staff excluded!)
     query_visitors = "SELECT DISTINCT visitor_id FROM events WHERE store_id = ? AND is_staff = 0"
     df_visitors = pd.read_sql_query(query_visitors, conn, params=(store_id,))
     total_unique_visitors = len(df_visitors)
@@ -31,34 +31,36 @@ def calculate_store_metrics(store_id: str) -> dict:
         WHERE store_id = ? AND is_staff = 0 AND (zone_id = 'BILLING' OR event_type = 'BILLING_QUEUE_JOIN')
     """
     df_billing = pd.read_sql_query(query_billing, conn, params=(store_id,))
-    df_billing['timestamp'] = pd.to_datetime(df_billing['timestamp'])
     
-    # 3. Load POS transactions dynamically [cite: 44]
+    # Force UTC timezone normalization to strip any string format differences (+00:00 vs Z)
+    df_billing['timestamp'] = pd.to_datetime(df_billing['timestamp']).dt.tz_localize(None)
+    
+    # 3. Load POS transactions dynamically
     converted_visitors = set()
     try:
         df_pos = pd.read_csv(POS_CSV_PATH)
         df_pos = df_pos[df_pos['store_id'] == store_id].copy()
-        df_pos['timestamp'] = pd.to_datetime(df_pos['timestamp'])
+        df_pos['timestamp'] = pd.to_datetime(df_pos['timestamp']).dt.tz_localize(None)
         
-        # Correlate via time windows [cite: 45]
+        # Correlate via time windows
         for _, txn in df_pos.iterrows():
             txn_time = txn['timestamp']
-            window_start = txn_time - timedelta(minutes=5) [cite: 46]
+            window_start = txn_time - timedelta(minutes=5)
             
-            # Find active sessions in the billing zone during this window 
+            # Find active sessions in the billing zone during this window
             active_in_window = df_billing[
                 (df_billing['timestamp'] >= window_start) & 
                 (df_billing['timestamp'] <= txn_time)
             ]['visitor_id'].unique()
             
             converted_visitors.update(active_in_window)
-    except Exception:
-        pass # Fallback if POS file hasn't been parsed yet
+    except Exception as e:
+        print("POS Processing Error:", e)
         
     num_converted = len(converted_visitors)
     conversion_rate = num_converted / total_unique_visitors if total_unique_visitors > 0 else 0.0
     
-    # 4. Compute Avg Dwell times per location zone 
+    # 4. Compute Avg Dwell times per location zone
     query_dwell = """
         SELECT zone_id, AVG(dwell_ms) as avg_dwell 
         FROM events 
@@ -68,7 +70,7 @@ def calculate_store_metrics(store_id: str) -> dict:
     df_dwell = pd.read_sql_query(query_dwell, conn, params=(store_id,))
     dwell_dict = dict(zip(df_dwell['zone_id'], df_dwell['avg_dwell']))
     
-    # 5. Extract current queue metrics & abandonment estimates [cite: 88, 94]
+    # 5. Extract current queue metrics & abandonment estimates
     query_queue = """
         SELECT COUNT(*) as join_count 
         FROM events 
@@ -89,14 +91,13 @@ def calculate_store_metrics(store_id: str) -> dict:
 
     conn.close()
     
-    # Data confidence flag drops if sample size is fewer than 20 sessions 
-    confidence_flag = True if total_unique_visitors >= 20 else False
+    confidence_flag = True if total_unique_visitors >= 20 else False [cite: 94]
     
     return {
         "unique_visitors": total_unique_visitors,
         "conversion_rate": round(conversion_rate, 4),
         "avg_dwell_per_zone": {k: round(v, 2) for k, v in dwell_dict.items()},
-        "queue_depth": 0, # Will be driven dynamically by live events stream later
+        "queue_depth": 0, 
         "abandonment_rate": round(abandonment_rate, 4),
-        "data_confidence": confidence_flag
+        "data_confidence": confidence_flag [cite: 94]
     }
