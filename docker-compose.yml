@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  intelligence-api:
+    build: .
+    container_name: store_intelligence_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/workspace
+    environment:
+      - ENV=development
