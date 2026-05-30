@@ -31,8 +31,14 @@ def save_events_batch(events: list[StoreEvent]) -> int:
     cursor = conn.cursor()
     processed_count = 0
     
+    # Wrap the batch in an explicit transaction for rapid ingestion performance
+    cursor.execute("BEGIN TRANSACTION")
+    
     for event in events:
         try:
+            # Capture total changes BEFORE executing this statement
+            changes_before = conn.total_changes
+            
             # INSERT OR IGNORE enforces strict idempotency by event_id
             cursor.execute("""
                 INSERT OR IGNORE INTO events 
@@ -51,7 +57,9 @@ def save_events_batch(events: list[StoreEvent]) -> int:
                 event.confidence,
                 json.dumps(event.metadata.model_dump())
             ))
-            if conn.total_changes > 0:
+            
+            # Only increment if THIS specific statement inserted a row
+            if conn.total_changes > changes_before:
                 processed_count += 1
         except Exception:
             continue # Partial success: skip malformed entries smoothly
