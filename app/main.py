@@ -6,6 +6,7 @@ import datetime
 from app.models import StoreEvent
 from app.ingestion import init_db, save_events_batch
 from app.metrics import calculate_store_metrics
+from app.funnel import calculate_store_funnel
 
 app = FastAPI(title="Apex Retail Store Intelligence API")
 
@@ -41,13 +42,12 @@ async def get_store_metrics(id: str):
 
 @app.get("/stores/{id}/funnel")
 async def get_store_funnel(id: str):
-    # Standard placeholder template - we will expand this with funnel logic shortly
-    return {
-        "store_id": id, 
-        "funnel": ["ENTRY", "ZONE_VISIT", "BILLING_QUEUE", "PURCHASE"], 
-        "counts": {"ENTRY": 0, "ZONE_VISIT": 0, "BILLING_QUEUE": 0, "PURCHASE": 0}, 
-        "drop_off_percentage": {}
-    }
+    """
+    Returns the sequential conversion funnel progression counts 
+    along with percentage drop-offs across retail milestones.
+    """
+    funnel_payload = calculate_store_funnel(id)
+    return funnel_payload
 
 @app.get("/stores/{id}/heatmap")
 async def get_store_heatmap(id: str):
