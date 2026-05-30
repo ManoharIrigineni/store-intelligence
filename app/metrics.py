@@ -91,7 +91,7 @@ def calculate_store_metrics(store_id: str) -> dict:
 
     conn.close()
     
-    confidence_flag = True if total_unique_visitors >= 20 else False [cite: 94]
+    confidence_flag = True if total_unique_visitors >= 20 else False
     
     return {
         "unique_visitors": total_unique_visitors,
@@ -99,5 +99,5 @@ def calculate_store_metrics(store_id: str) -> dict:
         "avg_dwell_per_zone": {k: round(v, 2) for k, v in dwell_dict.items()},
         "queue_depth": 0, 
         "abandonment_rate": round(abandonment_rate, 4),
-        "data_confidence": confidence_flag [cite: 94]
+        "data_confidence": confidence_flag
     }
