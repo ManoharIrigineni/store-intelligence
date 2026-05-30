@@ -1,0 +1,102 @@
+import sqlite3
+import pandas as pd
+from datetime import datetime, timedelta
+
+DB_PATH = "/workspace/store_intelligence.db"
+POS_CSV_PATH = "/workspace/pos_transactions.csv" 
+
+def calculate_store_metrics(store_id: str) -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    
+    # 1. Gather all unique customer sessions (Staff excluded!) 
+    query_visitors = "SELECT DISTINCT visitor_id FROM events WHERE store_id = ? AND is_staff = 0"
+    df_visitors = pd.read_sql_query(query_visitors, conn, params=(store_id,))
+    total_unique_visitors = len(df_visitors)
+    
+    if total_unique_visitors == 0:
+        conn.close()
+        return {
+            "unique_visitors": 0,
+            "conversion_rate": 0.0,
+            "avg_dwell_per_zone": {},
+            "queue_depth": 0,
+            "abandonment_rate": 0.0,
+            "data_confidence": False
+        }
+    
+    # 2. Extract billing interactions for conversion analysis
+    query_billing = """
+        SELECT visitor_id, timestamp 
+        FROM events 
+        WHERE store_id = ? AND is_staff = 0 AND (zone_id = 'BILLING' OR event_type = 'BILLING_QUEUE_JOIN')
+    """
+    df_billing = pd.read_sql_query(query_billing, conn, params=(store_id,))
+    df_billing['timestamp'] = pd.to_datetime(df_billing['timestamp'])
+    
+    # 3. Load POS transactions dynamically [cite: 44]
+    converted_visitors = set()
+    try:
+        df_pos = pd.read_csv(POS_CSV_PATH)
+        df_pos = df_pos[df_pos['store_id'] == store_id].copy()
+        df_pos['timestamp'] = pd.to_datetime(df_pos['timestamp'])
+        
+        # Correlate via time windows [cite: 45]
+        for _, txn in df_pos.iterrows():
+            txn_time = txn['timestamp']
+            window_start = txn_time - timedelta(minutes=5) [cite: 46]
+            
+            # Find active sessions in the billing zone during this window 
+            active_in_window = df_billing[
+                (df_billing['timestamp'] >= window_start) & 
+                (df_billing['timestamp'] <= txn_time)
+            ]['visitor_id'].unique()
+            
+            converted_visitors.update(active_in_window)
+    except Exception:
+        pass # Fallback if POS file hasn't been parsed yet
+        
+    num_converted = len(converted_visitors)
+    conversion_rate = num_converted / total_unique_visitors if total_unique_visitors > 0 else 0.0
+    
+    # 4. Compute Avg Dwell times per location zone 
+    query_dwell = """
+        SELECT zone_id, AVG(dwell_ms) as avg_dwell 
+        FROM events 
+        WHERE store_id = ? AND is_staff = 0 AND zone_id IS NOT NULL 
+        GROUP BY zone_id
+    """
+    df_dwell = pd.read_sql_query(query_dwell, conn, params=(store_id,))
+    dwell_dict = dict(zip(df_dwell['zone_id'], df_dwell['avg_dwell']))
+    
+    # 5. Extract current queue metrics & abandonment estimates [cite: 88, 94]
+    query_queue = """
+        SELECT COUNT(*) as join_count 
+        FROM events 
+        WHERE store_id = ? AND event_type = 'BILLING_QUEUE_JOIN'
+    """
+    query_abandon = """
+        SELECT COUNT(*) as abandon_count 
+        FROM events 
+        WHERE store_id = ? AND event_type = 'BILLING_QUEUE_ABANDON'
+    """
+    
+    try:
+        queue_joins = conn.execute(query_queue, (store_id,)).fetchone()[0]
+        queue_abandons = conn.execute(query_abandon, (store_id,)).fetchone()[0]
+        abandonment_rate = queue_abandons / queue_joins if queue_joins > 0 else 0.0
+    except Exception:
+        abandonment_rate = 0.0
+
+    conn.close()
+    
+    # Data confidence flag drops if sample size is fewer than 20 sessions 
+    confidence_flag = True if total_unique_visitors >= 20 else False
+    
+    return {
+        "unique_visitors": total_unique_visitors,
+        "conversion_rate": round(conversion_rate, 4),
+        "avg_dwell_per_zone": {k: round(v, 2) for k, v in dwell_dict.items()},
+        "queue_depth": 0, # Will be driven dynamically by live events stream later
+        "abandonment_rate": round(abandonment_rate, 4),
+        "data_confidence": confidence_flag
+    }
