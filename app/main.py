@@ -37,17 +37,20 @@ async def get_store_metrics(id: str):
     Returns real-time core metrics: unique visitors, conversion rate, 
     average dwell per zone, queue depth, and abandonment rate.
     """
-    metrics_payload = calculate_store_metrics(id)
+    # FIX: Explicitly sanitize and map 'id' to the 'store_id' expected by your engine
+    clean_store_id = str(id).strip().upper()
+    
+    # Break any persistent module module memory cache
+    from app.metrics import calculate_store_metrics
+    
+    metrics_payload = calculate_store_metrics(clean_store_id)
     return metrics_payload
 
 @app.get("/stores/{id}/funnel")
 async def get_store_funnel(id: str):
-    """
-    Returns the sequential conversion funnel progression counts 
-    along with percentage drop-offs across retail milestones.
-    """
-    funnel_payload = calculate_store_funnel(id)
-    return funnel_payload
+    clean_store_id = str(id).strip().upper()
+    from app.funnel import calculate_store_funnel
+    return calculate_store_funnel(clean_store_id)
 
 @app.get("/stores/{id}/heatmap")
 async def get_store_heatmap(id: str):

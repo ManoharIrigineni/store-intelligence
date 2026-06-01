@@ -12,3 +12,22 @@ ENV/
 *.zip
 data/
 video_clips/
+
+# Database
+*.db
+*.db-journal
+
+# Python & Testing Caches
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local Ad-hoc Test Scripts
+check_matching.py
+generate_mock_video.py
+peek_db.py
+run_direct_test.py
+run_production_test.py
+seed_db_direct.py
+test_metric.py
+test_push.py

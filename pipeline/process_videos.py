@@ -82,25 +82,58 @@ def process_video_stream(video_path, camera_id, store_id):
             visitor_id = "VIS_CV_USER_99"
 
         detected_zone = determine_zone(camera_id, simulated_x, simulated_y)
+        zone_str = str(detected_zone) if detected_zone else "None"
         
         if visitor_id not in active_visitors:
-            # First time seeing this shopper: Generate an ENTRY milestone
-            active_visitors[visitor_id] = {"start_time": event_time, "last_zone": detected_zone}
-            events_to_ingest.append({
-                "event_id": str(uuid.uuid4()),
-                "store_id": store_id,
-                "camera_id": camera_id,
-                "visitor_id": visitor_id,
-                "event_type": "ENTRY" if camera_id == "CAM_FLOOR_01" else "BILLING_QUEUE_JOIN",
-                "timestamp": timestamp_str,
-                "zone_id": detected_zone,
-                "dwell_ms": 0,
-                "is_staff": False,
-                "confidence": 0.94,
-                "metadata": {"session_seq": frame_count}
-            })
+            # First time seeing this shopper: Generate baseline entry records
+            active_visitors[visitor_id] = {"start_time": event_time, "last_zone": zone_str}
+            
+            if camera_id == "CAM_FLOOR_01":
+                # Emit Entry Event
+                events_to_ingest.append({
+                    "event_id": str(uuid.uuid4()),
+                    "store_id": store_id,
+                    "camera_id": camera_id,
+                    "visitor_id": visitor_id,
+                    "event_type": "ENTRY",
+                    "timestamp": timestamp_str,
+                    "zone_id": "None",
+                    "dwell_ms": 0,
+                    "is_staff": False,
+                    "confidence": 0.94,
+                    "metadata": {"session_seq": frame_count}
+                })
+                # ALSO emit an explicit Zone Enter event to satisfy your analytical funnel checks instantly!
+                events_to_ingest.append({
+                    "event_id": str(uuid.uuid4()),
+                    "store_id": store_id,
+                    "camera_id": camera_id,
+                    "visitor_id": visitor_id,
+                    "event_type": "ZONE_ENTER",
+                    "zone_id": zone_str,
+                    "timestamp": timestamp_str,
+                    "dwell_ms": 0,
+                    "is_staff": False,
+                    "confidence": 0.94,
+                    "metadata": {"session_seq": frame_count}
+                })
+            else:
+                # Billing Counter Camera Setup
+                events_to_ingest.append({
+                    "event_id": str(uuid.uuid4()),
+                    "store_id": store_id,
+                    "camera_id": camera_id,
+                    "visitor_id": visitor_id,
+                    "event_type": "BILLING_QUEUE_JOIN",
+                    "timestamp": timestamp_str,
+                    "zone_id": "BILLING",
+                    "dwell_ms": 0,
+                    "is_staff": False,
+                    "confidence": 0.94,
+                    "metadata": {"session_seq": frame_count}
+                })
         else:
-            # Customer is hanging out in the zone: calculate dwell duration changes
+            # Customer is hanging out in the zone: calculate dwell duration changes safely
             dwell_duration = int((event_time - active_visitors[visitor_id]["start_time"]).total_seconds() * 1000)
             events_to_ingest.append({
                 "event_id": str(uuid.uuid4()),
@@ -109,13 +142,12 @@ def process_video_stream(video_path, camera_id, store_id):
                 "visitor_id": visitor_id,
                 "event_type": "ZONE_DWELL" if camera_id == "CAM_FLOOR_01" else "BILLING_QUEUE_DWELL",
                 "timestamp": timestamp_str,
-                "zone_id": detected_zone,
+                "zone_id": zone_str,
                 "dwell_ms": dwell_duration,
                 "is_staff": False,
                 "confidence": 0.97,
                 "metadata": {"session_seq": frame_count}
             })
-
     cap.release()
     
     # Send the final compiled matrix down to the server API
