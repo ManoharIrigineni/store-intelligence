@@ -74,6 +74,28 @@ async def get_store_heatmap(id: str):
         
     return {"store_id": id, "heatmap": heatmap_data}
 
+@app.get("/stores/{id}/heatmap")
+async def get_store_heatmap(id: str):
+    """Calculates distribution metrics across distinct physical store zones."""
+    clean_store_id = str(id).strip().upper()
+    import sqlite3
+    import pandas as pd
+    from app.funnel import DB_PATH
+    
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        query = "SELECT zone_id, COUNT(DISTINCT visitor_id) as density FROM events WHERE store_id = ? GROUP BY zone_id"
+        df = pd.read_sql_query(query, conn, params=(clean_store_id,))
+        # Drop meaningless layout labels if present
+        df = df[~df['zone_id'].str.upper().isin(['NONE', 'NAN', 'ENTRY', 'EXIT'])]
+        heatmap_data = [{"zone": row["zone_id"], "density": int(row["density"])} for _, row in df.iterrows()]
+    except Exception:
+        heatmap_data = []
+    finally:
+        conn.close()
+        
+    return {"store_id": id, "heatmap": heatmap_data}
+
 @app.get("/stores/{id}/anomalies")
 async def get_store_anomalies(id: str):
     """Identifies potential in-store hardware or detection flags (e.g., extremely low confidence)."""
