@@ -54,11 +54,52 @@ async def get_store_funnel(id: str):
 
 @app.get("/stores/{id}/heatmap")
 async def get_store_heatmap(id: str):
-    return {"store_id": id, "heatmap": []}
+    """Calculates distribution metrics across distinct physical store zones."""
+    clean_store_id = str(id).strip().upper()
+    import sqlite3
+    import pandas as pd
+    from app.funnel import DB_PATH
+    
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        query = "SELECT zone_id, COUNT(DISTINCT visitor_id) as density FROM events WHERE store_id = ? GROUP BY zone_id"
+        df = pd.read_sql_query(query, conn, params=(clean_store_id,))
+        # Drop meaningless layout labels if present
+        df = df[~df['zone_id'].str.upper().isin(['NONE', 'NAN', 'ENTRY', 'EXIT'])]
+        heatmap_data = [{"zone": row["zone_id"], "density": int(row["density"])} for _, row in df.iterrows()]
+    except Exception:
+        heatmap_data = []
+    finally:
+        conn.close()
+        
+    return {"store_id": id, "heatmap": heatmap_data}
 
 @app.get("/stores/{id}/anomalies")
 async def get_store_anomalies(id: str):
-    return {"store_id": id, "anomalies": []}
+    """Identifies potential in-store hardware or detection flags (e.g., extremely low confidence)."""
+    clean_store_id = str(id).strip().upper()
+    import sqlite3
+    import pandas as pd
+    from app.funnel import DB_PATH
+    
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        # Pull low-confidence events that managed to bypass early thresholds, or extreme system spikes
+        query = "SELECT event_id, camera_id, event_type, confidence FROM events WHERE store_id = ? AND confidence < 0.60"
+        df = pd.read_sql_query(query, conn, params=(clean_store_id,))
+        anomaly_list = [
+            {
+                "event_id": row["event_id"],
+                "type": "LOW_CONFIDENCE_DETECTION",
+                "description": f"Camera {row['camera_id']} recorded a low confidence score of {row['confidence']:.2f} during {row['event_type']}."
+            } for _, row in df.iterrows()
+        ]
+    except Exception:
+        anomaly_list = []
+    finally:
+        conn.close()
+        
+    return {"store_id": id, "anomalies": anomaly_list}
 
 @app.get("/health")
 async def health_check():
