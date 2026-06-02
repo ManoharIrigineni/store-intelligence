@@ -14,3 +14,20 @@ An end-to-end computer vision telemetry ingestion and real-time retail analytics
 Deploy the asynchronous microservice app wrapper cluster using Docker Compose:
 ```bash
 docker-compose up --build -d
+
+
+
+### 2. Mock and Process Video Telemetry Assets
+
+Simulate real-time retail computer vision tracking:
+
+```bash
+# Generate the simulated widescreen tracking .mp4 clip
+python3 generate_mock_video.py
+
+# Execute the stream detection engine to send events to the server
+python3 pipeline/process_videos.py
+
+
+
+
