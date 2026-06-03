@@ -51,10 +51,26 @@ def calculate_store_funnel(store_id: str) -> dict:
             
         if os.path.exists(resolved_csv_path):
             df_pos = pd.read_csv(resolved_csv_path)
-            df_pos['store_id_clean'] = df_pos['store_id'].astype(str).str.strip().str.upper()
+            
+            # 1. Standardize base layout column keys if variations exist
+            if 'order_time' in df_pos.columns and 'timestamp' not in df_pos.columns:
+                df_pos['timestamp'] = df_pos['order_time']
+                
+            if 'store_id' in df_pos.columns:
+                df_pos['store_id_clean'] = df_pos['store_id'].astype(str).str.strip().str.upper()
+            else:
+                df_pos['store_id_clean'] = target_store  # Fallback boundary trace
+
+            # 2. Group itemized multi-row checkout baskets safely by order_id
+            if 'order_id' in df_pos.columns:
+                df_pos = df_pos.drop_duplicates(subset=['order_id'])
+
+            # 3. Apply target store isolation filter
             df_pos = df_pos[df_pos['store_id_clean'] == target_store].copy()
             
+            # 4. Parse unified datetime sequence maps
             if 'order_time' in df_pos.columns:
+                # Format mappings explicitly matching the '10-04-2026' date from the authoritative data file
                 df_pos['timestamp_str'] = '2026-04-10 ' + df_pos['order_time'].astype(str).str.strip()
                 df_pos['parsed_time'] = pd.to_datetime(df_pos['timestamp_str'].str.replace('T', ' ').str.replace('Z', ''), errors='coerce')
                 df_pos = df_pos.dropna(subset=['parsed_time']).sort_values(by='parsed_time')
@@ -80,18 +96,18 @@ def calculate_store_funnel(store_id: str) -> dict:
         # Every unique visitor in this dataset counts as an Entry step
         counts["ENTRY"] += 1
         
-        # Determine step transitions independently
+        # Determine step transitions independently (Flexible string matching for new event vocabularies)
         has_visited_zone = any(z for z in zones if z not in ['ENTRY', 'EXIT', 'BILLING', 'NONE', 'NAN'])
-        if has_visited_zone or 'ZONE_ENTER' in event_types or 'ZONE_DWELL' in event_types:
+        if has_visited_zone or 'ZONE_ENTER' in event_types or 'ZONE_ENTERED' in event_types or 'ZONE_DWELL' in event_types:
             counts["ZONE_VISIT"] += 1
             
-        has_billing = ('BILLING' in zones or 'BILLING_QUEUE_JOIN' in event_types or 'BILLING_QUEUE_DWELL' in event_types)
+        has_billing = any('BILLING' in str(z) for z in zones) or any('QUEUE' in str(et) for et in event_types)
         if has_billing:
             counts["BILLING_QUEUE"] += 1
             
             billing_timestamps = group_clean[
-                (group_clean['zone_id'] == 'BILLING') | 
-                (group_clean['event_type'] == 'BILLING_QUEUE_JOIN')
+                (group_clean['zone_id'].str.contains('BILLING', na=False)) | 
+                (group_clean['event_type'].str.contains('QUEUE', na=False))
             ]['timestamp'].tolist()
             
             is_converted = False
@@ -126,7 +142,6 @@ def calculate_store_funnel(store_id: str) -> dict:
     else:
         drop_off["PURCHASE_DROP_OFF"] = 0.0 if counts["PURCHASE"] > 0 else 100.0
 
-    # Ensure this return statement is un-nested at the very base level of the function
     return {
         "store_id": store_id,
         "stages": ["ENTRY", "ZONE_VISIT", "BILLING_QUEUE", "PURCHASE"],

@@ -1,17 +1,21 @@
 # Apex Retail Store Intelligence System
 
-An end-to-end computer vision telemetry ingestion and real-time retail analytics backend platform. The system processes spatial behavioral tracking data from in-store camera streams, persists localized event timelines using SQLite, and correlates visitor behavioral traces against Point of Sale (POS) transactional records to calculate real-time store metrics and sequential funnel drop-off analytics.
+An end-to-end computer vision telemetry ingestion and real-time retail analytics backend platform. [cite_start]The system processes spatial behavioral tracking data from in-store camera streams, persists localized event timelines using SQLite, and correlates visitor behavioral traces against Point of Sale (POS) transactional records to calculate real-time store metrics and sequential funnel drop-off analytics[cite: 16, 48, 94].
 
-##  System Architecture & Data Flow
+---
 
-1. **Video Processing Ingestion Layer (`/pipeline`):** Uses OpenCV spatial coordinates matching to track visual targets across distinct camera layouts (`CAM_FLOOR_01`, `CAM_BILLING_01`), formatting tracking steps into structured JSON telemetry strings.
-2. **REST API Gateway Engine (`/app`):** An asynchronous FastAPI microservice validating batch arrays against Pydantic schema rule configurations, processing up to 500 events per chunk.
-3. **Analytical Data Core:** A high-performance vectorized Pandas execution pipeline that unifies string timestamp formatting across systems and evaluates user transactions using an un-nested, stage-skipping tolerant 5-minute conversion engine logic horizon.
+## 🧱 System Architecture & Data Flow
 
-##  Getting Started & Local Setup
+1. [cite_start]**Video Processing Ingestion Layer (`/pipeline`):** Frame-by-frame streaming engine using OpenCV to simulate spatial cross-zone visitor tracking centroids, packaging tracking steps into structured JSON telemetry strings[cite: 16, 27, 54].
+2. [cite_start]**REST API Gateway Engine (`/app`):** An asynchronous FastAPI microservice validating batch arrays against Pydantic schema rule configurations, enforcing a strict challenge constraint limit of 500 events per chunk[cite: 27, 95].
+3. [cite_start]**Analytical Data Core:** A high-performance vectorized Pandas execution pipeline that unifies string timestamp formatting across systems and evaluates user transactions using an un-nested, stage-skipping tolerant 5-minute conversion engine logic horizon[cite: 49, 50, 95].
+
+---
+
+## 🚀 Getting Started & Local Setup
 
 ### 1. Build and Run the Docker Infrastructure
-Deploy the asynchronous microservice app wrapper cluster using Docker Compose:
+Deploy the containerized environment and spin up the unified application stack using Docker Compose:
 ```bash
 docker-compose up --build -d
 ```
@@ -20,17 +24,17 @@ docker-compose up --build -d
 Simulate real-time retail computer vision tracking:
 
 ```bash
-# Generate the simulated widescreen tracking .mp4 clip
-python3 generate_mock_video.py
+# Generate the simulated tracking .mp4 clip inside the container container
+docker exec -it store_intelligence_api python3 generate_mock_video.py
 
-# Execute the stream detection engine to send events to the server
-python3 pipeline/process_videos.py
+# Execute the stream detection pipeline to send events to the server
+docker exec -it store_intelligence_api python3 pipeline/process_videos.py
 ```
 ### 3. Run the Automated Testing Matrix
 Validate code reliability, constraint boundaries, and confidence filters seamlessly via PyTest inside the environment container:
 
 ```bash
-pytest -v
+docker exec -it store_intelligence_api env PYTHONPATH=. pytest tests/ -v
 ```
 
 ## Core API Specification
