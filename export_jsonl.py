@@ -2,6 +2,7 @@ import sqlite3
 import json
 import os
 
+#database path
 DB_PATH = "/workspace/store_intelligence.db"
 OUTPUT_PATH = "/workspace/events.jsonl"
 
