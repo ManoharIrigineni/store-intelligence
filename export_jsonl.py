@@ -4,7 +4,7 @@ import os
 
 DB_PATH = "/workspace/store_intelligence.db"
 OUTPUT_PATH = "/workspace/events.jsonl"
-
+#manoohars comment
 def export_to_jsonl():
     if not os.path.exists(DB_PATH):
         print(f"❌ Error: Database file not found at {DB_PATH}")
