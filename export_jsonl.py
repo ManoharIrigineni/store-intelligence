@@ -14,7 +14,7 @@ def export_to_jsonl():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Select all core fields matching your strict schema
+
     cursor.execute("""
         SELECT event_id, store_id, camera_id, visitor_id, event_type, 
                timestamp, zone_id, dwell_ms, is_staff, confidence, metadata 
