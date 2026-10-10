@@ -2,7 +2,6 @@ import sqlite3
 import json
 import os
 
-# Paths matching your container volume mounts
 DB_PATH = "/workspace/store_intelligence.db"
 OUTPUT_PATH = "/workspace/events.jsonl"
 
